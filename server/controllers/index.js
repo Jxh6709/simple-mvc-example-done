@@ -3,6 +3,7 @@ const models = require('../models');
 
 // get the Cat model
 const Cat = models.Cat.CatModel;
+const Dog = models.Dog.DogModel;
 
 // default fake data so that we have something to work with until we make a real Cat
 const defaultData = {
@@ -11,7 +12,16 @@ const defaultData = {
 };
 
 // object for us to keep track of the last Cat we made and dynamically update it sometimes
-let lastAdded = new Cat(defaultData);
+let lastAddedCat = new Cat(defaultData);
+
+// default dog
+const defaultDog = {
+  name: 'unknown',
+  breed: 'mutt',
+  age: 27,
+};
+
+let lastAddedDog = new Dog(defaultDog);
 
 // function to handle requests to the main page
 // controller functions in Express receive the full HTTP request
@@ -24,7 +34,7 @@ const hostIndex = (req, res) => {
   // actually calls index.jade. A second parameter of JSON can be passed
   // into the jade to be used as variables with #{varName}
   res.render('index', {
-    currentName: lastAdded.name,
+    currentName: lastAddedCat.name,
     title: 'Home',
     pageName: 'Home Page',
   });
@@ -43,6 +53,11 @@ const readAllCats = (req, res, callback) => {
   // The lean function will force find to return data in the js
   // object format, rather than the Mongo document format.
   Cat.find(callback).lean();
+};
+
+// same for the dogs
+const readAllDogs = (req, res, callback) => {
+  Dog.find(callback).lean();
 };
 
 
@@ -105,13 +120,34 @@ const hostPage2 = (req, res) => {
 // controller functions in Express receive the full HTTP request
 // and a pre-filled out response object to send
 const hostPage3 = (req, res) => {
-    // res.render takes a name of a page to render.
-    // These must be in the folder you specified as views in your main app.js file
-    // Additionally, you don't need .jade because you registered the file type
-    // in the app.js as jade. Calling res.render('index')
-    // actually calls index.jade. A second parameter of JSON can be passed
-    // into the jade to be used as variables with #{varName}
-  res.render('page3');
+  // res.render takes a name of a page to render.
+  // These must be in the folder you specified as views in your main app.js file
+  // Additionally, you don't need .jade because you registered the file type
+  // in the app.js as jade. Calling res.render('index')
+  // actually calls index.jade. A second parameter of JSON can be passed
+  // into the jade to be used as variables with #{varName}
+  res.render('page3', {
+    title: 'Dog Time',
+  });
+};
+
+// Time for page 4
+const hostPage4 = (req, res) => {
+  // function to call when we get objects back from the database.
+  // With Mongoose's find functions, you will get an err and doc(s) back
+  const callback = (err, dogs) => {
+    if (err) {
+      return res.status(500).json({ err }); // if error, return it
+    }
+    // return success
+    return res.render('page4',
+      {
+        title: 'All the dogs that were let out',
+        doggos: dogs,
+      });
+  };
+
+  readAllDogs(req, res, callback);
 };
 
 // function to handle get request to send the name
@@ -121,7 +157,7 @@ const getName = (req, res) => {
   // res.json returns json to the page.
   // Since this sends back the data through HTTP
   // you can't send any more data to this user until the next response
-  res.json({ name: lastAdded.name });
+  res.json({ name: lastAddedCat.name });
 };
 
 // function to handle a request to set the name
@@ -155,11 +191,11 @@ const setName = (req, res) => {
   const savePromise = newCat.save();
 
   savePromise.then(() => {
-    // set the lastAdded cat to our newest cat object.
+    // set the lastAddedCat cat to our newest cat object.
     // This way we can update it dynamically
-    lastAdded = newCat;
+    lastAddedCat = newCat;
     // return success
-    res.json({ name: lastAdded.name, beds: lastAdded.bedsOwned });
+    res.json({ name: lastAddedCat.name, beds: lastAddedCat.bedsOwned });
   });
 
   // if error, return it
@@ -220,15 +256,15 @@ const updateLast = (req, res) => {
   // You can treat objects just like that - objects.
   // Normally you'd find a specific object, but we will only
   // give the user the ability to update our last object
-  lastAdded.bedsOwned++;
+  lastAddedCat.bedsOwned++;
 
   // once you change all the object properties you want,
   // then just call the Model object's save function
   // create a new save promise for the database
-  const savePromise = lastAdded.save();
+  const savePromise = lastAddedCat.save();
 
   // send back the name as a success for now
-  savePromise.then(() => res.json({ name: lastAdded.name, beds: lastAdded.bedsOwned }));
+  savePromise.then(() => res.json({ name: lastAddedCat.name, beds: lastAddedCat.bedsOwned }));
 
   // if save error, just return an error for now
   savePromise.catch((err) => res.status(500).json({ err }));
@@ -249,16 +285,71 @@ const notFound = (req, res) => {
   });
 };
 
+const createNewDog = (req, res) => {
+  // we need the stuff
+  if (!req.body.name || !req.body.breed || !req.body.age) {
+    // if not respond with a 400 error
+    // (either through json or a web page depending on the client dev)
+    return res.status(400).json({ error: 'Name, Breed and Age are all required' });
+  }
+
+  // our obj
+  const dogData = {
+    name: req.body.name,
+    breed: req.body.breed,
+    age: req.body.age,
+  };
+
+  // create a new object of CatModel with the object to save
+  const newDoggo = new Dog(dogData);
+
+  // create new save promise for the database
+  const savePromise = newDoggo.save();
+
+  savePromise.then(() => {
+    // set the lastAddedCat cat to our newest cat object.
+    // This way we can update it dynamically
+    lastAddedDog = newDoggo;
+    // return success
+    res.json({ name: lastAddedDog.name, breed: lastAddedDog.breed, age: lastAddedDog.age });
+  });
+
+  // if error, return it
+  savePromise.catch((err) => res.status(500).json({ err }));
+
+  return res;
+};
+
+const searchAndUpdateDog = (req, res) => {
+  if (!req.body.name) {
+    return res.status(400).json({ error: 'Name is required to perform a search' });
+  }
+  const query = { name: req.body.name };
+
+  return Dog.findOneAndUpdate(query, { $inc: { age: 1 } }, { new: true }, (err, doc) => {
+    if (err) {
+      return res.status(500).json({ err }); // if error, return it
+    }
+    if (!doc) {
+      return res.json({ error: 'No dogs found' });
+    }
+    return res.json({ name: doc.name, breed: doc.breed, age: doc.age });
+  });
+};
+
 // export the relevant public controller functions
 module.exports = {
   index: hostIndex,
   page1: hostPage1,
   page2: hostPage2,
   page3: hostPage3,
+  page4: hostPage4,
   readCat,
   getName,
   setName,
   updateLast,
   searchName,
   notFound,
+  setDog: createNewDog,
+  searchAndUpdateDog,
 };
